@@ -6,12 +6,14 @@ find_package (OpenMP)
 
 add_executable (xv3rfun)
 
-target_link_libraries (xv3rfun 
+target_link_libraries (xv3rfun
 
-                       PUBLIC 
+                       PUBLIC
 
                        stell
                        $<$<BOOL:xv3rfun>:OpenMP::OpenMP_Fortran>
 )
 
 add_subdirectory (Sources)
+
+install (TARGETS xv3rfun)
