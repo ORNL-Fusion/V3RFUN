@@ -5,6 +5,7 @@ project (v3rfun C Fortran)
 find_package (OpenMP)
 
 add_executable (xv3rfun)
+add_dependencies (xv3rfun pull_xv3rfun)
 
 target_link_libraries (xv3rfun
 
