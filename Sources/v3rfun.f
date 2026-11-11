@@ -73,7 +73,7 @@
       END INTERFACE
 
       TYPE (v3rfun_context_class), POINTER :: context => null()
-      TYPE (diagnostic_dot_coil), POINTER  :: head
+      CLASS (diagnostic_dot_coil), POINTER :: head
       INTEGER                              :: id_num
 #if defined(MPI_OPT)
       INTEGER                              :: error
@@ -105,10 +105,10 @@
             CASE ('flux_loop', 'flux_loop_circular', 'magnetic_probe',         &
      &            'magnetic_probe_tokamak', 'b_rogowski', 'i_rogowski',        &
      &            'f_rogowski','s_rogowski')
-               CALL v3rfun_context_write_mrf(context, head, id_num)
+               CALL context%write_mrf(head, id_num)
 
             CASE ('b_point_probe')
-               CALL v3rfun_context_write_point(context, head, id_num)
+               CALL context%write_point(head, id_num)
 
             CASE DEFAULT
                CALL err_fatal('Unknown magnetic diagnostic type.')
@@ -119,7 +119,7 @@
          id_num = id_num + 1
       END DO
 
-      CALL v3rfun_context_destruct(context)
+      DEALLOCATE(context)
 
       CALL profiler_destruct
 

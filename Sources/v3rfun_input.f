@@ -259,6 +259,15 @@
          l_read_coils_dot = .false.
       END IF
 
+!  kp and kp_shell could be
+!>  @todo FIXME: When kp and kp_shell = 1 it doesn't take into account the full
+!>  3D torodial angle. There should be a way to consider the 3D response on a
+!>  single phi plane but for now set a minimum responce grid.
+      kp = MAX(kp, 180/n_field_periods_nli)
+      IF (use_con_shell) THEN
+         kp_shell = MAX(kp_shell, 180/n_field_periods_nli)
+      END IF
+
       WRITE (*,*) ' *** V3RFUN namelist input read from ' //                   &
      &            TRIM(namelist_file)
 
