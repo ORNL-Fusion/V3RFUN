@@ -176,7 +176,9 @@
 !>  Biotsavart Coil object.
          TYPE (bsc_coil), POINTER               :: coil => null()
 !>  Reference to the next vertex.
-         TYPE (diagnostic_dot_coil), POINTER    :: next => null()
+         CLASS (diagnostic_dot_coil), POINTER   :: next => null()
+      CONTAINS
+         FINAL     :: diagnostic_dot_destruct
       END TYPE
 
       CONTAINS
@@ -203,122 +205,151 @@
       CHARACTER (len=*), INTENT(in)           :: filename
 
 !  local variables
-      TYPE (diagnostic_dot_coil), POINTER     :: current_coil
-      TYPE (diagnostic_dot_coil), POINTER     :: new_coil
       INTEGER                                 :: status
       INTEGER                                 :: iou
-      CHARACTER (len=diagnostic_dot_line_len) :: line
       INTEGER                                 :: line_number
       REAL (rprec)                            :: start_time
 
 !  Start of executable code
       start_time = profiler_get_start_time()
 
-      diagnostic_dot_construct => null()
-      new_coil => null()
-      current_coil => null()
-
 !  Open the diagnostic dot file.
       CALL safe_open(iou, status, filename, 'old', 'formatted')
 
-!  Read lines until a keywood is reached. Read the first line out side the loop.
-!  Once a keyword is reached, hand off to the appropriate parsing function. The
-!  parsing functions will update the next line when keyword is reached.
-      READ (iou, '(a)', iostat=status) line
       line_number = 1
-
-      DO
-         SELECT CASE (TRIM(line))
-
-            CASE DEFAULT
-               READ (iou, '(a)', iostat=status) line
-               line_number = line_number + 1
-
-            CASE ('end_of_file')
-               EXIT
-
-            CASE ('flux_loop')
-               new_coil =>                                                     &
-     &            diagnostic_dot_parse_filaments(iou, line, line_number,       &
-     &                                           .false., 'Wb')
-               new_coil%d_type = 'flux_loop'
-
-            CASE ('flux_loop_circular')
-               new_coil =>                                                     &
-     &            diagnostic_dot_parse_probe(iou, line, line_number,           &
-     &                                       .false., 'Wb')
-               new_coil%d_type = 'flux_loop_circular'
-
-            CASE ('magnetic_probe')
-               new_coil =>                                                     &
-     &            diagnostic_dot_parse_probe(iou, line, line_number,           &
-     &                                       .false., 'T')
-               new_coil%d_type = 'magnetic_probe'
-
-            CASE ('magnetic_probe_tokamak')
-               new_coil =>                                                     &
-     &            diagnostic_dot_parse_probe(iou, line, line_number,           &
-     &                                       .true., 'T')
-               new_coil%d_type = 'magnetic_probe_tokamak'
-
-            CASE ('rogowski', 'b_rogowski')
-               new_coil =>                                                     &
-     &            diagnostic_dot_parse_filaments(iou, line, line_number,       &
-     &                                           .true., 'T')
-               new_coil%d_type = 'b_rogowski'
-
-            CASE ('i_rogowski')
-               new_coil =>                                                     &
-     &            diagnostic_dot_parse_filaments(iou, line, line_number,       &
-     &                                           .true., 'A')
-               new_coil%d_type = 'i_rogowski'
-
-            CASE ('f_rogowski')
-               new_coil =>                                                     &
-     &            diagnostic_dot_parse_filaments(iou, line, line_number,       &
-     &                                           .true., 'Wb')
-               new_coil%d_type = 'f_rogowski'
-
-            CASE ('s_rogowski')
-               new_coil => diagnostic_dot_parse_s_rogowski(iou, line,          &
+      diagnostic_dot_construct => diagnostic_dot_init_coil(iou,                &
      &                                                     line_number)
-               new_coil%d_type = 's_rogowski'
-
-            CASE ('b_point_probe')
-                new_coil =>                                                    &
-     &             diagnostic_dot_parse_point(iou, line, line_number,          &
-     &                                        'T', .true.)
-                new_coil%d_type = 'b_point_probe'
-
-            CASE ('b_point_probe_cyl')
-                new_coil =>                                                    &
-     &             diagnostic_dot_parse_point(iou, line, line_number,          &
-     &                                        'T', .false.)
-                new_coil%d_type = 'b_point_probe'
-
-         END SELECT
-
-!  Check that the current coil was associtaed before assiging the pointer. When
-!  a diagnostic dot file line is read but doens't contain a keyword, a new
-!  coil does not get allocated. If a new coil was created check to see if it is
-!  the first coils. Otherwise assign it to the next coil and move the current
-!  coil to the new coil.
-         IF (ASSOCIATED(new_coil)) THEN
-            IF (.not.ASSOCIATED(diagnostic_dot_construct)) THEN
-               current_coil => new_coil
-               diagnostic_dot_construct => current_coil
-            ELSE
-               current_coil%next => new_coil
-               current_coil => current_coil%next
-            END IF
-         END IF
-
-         new_coil => null()
-      END DO
 
       CLOSE(iou)
 
       CALL profiler_set_stop_time('diagnostic_dot_construct',                  &
+     &                            start_time)
+
+      END FUNCTION
+
+!-------------------------------------------------------------------------------
+!>  Initialize a coil.
+!>
+!>  Allocates memory and initializes all the diagnostic coils by parseing the
+!>  diagnostic dot file. Then recursively allocates the next coil.
+!>
+!>  @param[in] iou         Input output unit number.
+!>  @param[in] line_number Current line number in the file.
+!>  @returns An initialized @ref diagnostic_dot_coil or null if the end of the
+!>           coil was reached.
+!-------------------------------------------------------------------------------
+      RECURSIVE FUNCTION diagnostic_dot_init_coil(iou, line_number)            &
+     & RESULT(current_coil)
+
+      IMPLICIT NONE
+
+!  Declare Arguments
+      TYPE (diagnostic_dot_coil), POINTER :: current_coil
+      INTEGER, INTENT(in)                     :: iou
+      INTEGER, INTENT(inout)                  :: line_number
+
+!  local variables
+      CHARACTER (len=diagnostic_dot_line_len) :: line
+      INTEGER                                 :: status
+      REAL (rprec)                            :: start_time
+
+!  Start of executable code
+      start_time = profiler_get_start_time()
+
+!  Read lines until a keyword is reached. Read the first line outside the loop.
+!  Once a keyword is reached, hand off to the appropriate parsing function. The
+!  parsing functions will update the next line when keyword is reached.
+      READ (iou, '(a)', iostat=status) line
+      line_number = line_number + 1
+
+      SELECT CASE (TRIM(line))
+
+         CASE DEFAULT
+            current_coil => diagnostic_dot_init_coil(iou, line_number)
+            CALL profiler_set_stop_time('diagnostic_dot_init_coil',            &
+     &                                  start_time)
+            RETURN
+
+         CASE ('end_of_file')
+            current_coil => null()
+            CALL profiler_set_stop_time('diagnostic_dot_init_coil',            &
+     &                                  start_time)
+            RETURN
+
+         CASE ('flux_loop')
+            ALLOCATE(current_coil)
+            current_coil =>                                                    &
+     &         diagnostic_dot_parse_filaments(iou, line, line_number,          &
+     &                                        .false., 'Wb')
+            current_coil%d_type = 'flux_loop'
+
+         CASE ('flux_loop_circular')
+            ALLOCATE(current_coil)
+            current_coil =>                                                    &
+     &         diagnostic_dot_parse_probe(iou, line, line_number,              &
+     &                                    .false., 'Wb')
+            current_coil%d_type = 'flux_loop_circular'
+
+         CASE ('magnetic_probe')
+            ALLOCATE(current_coil)
+            current_coil =>                                                    &
+     &         diagnostic_dot_parse_probe(iou, line, line_number,              &
+     &                                    .false., 'T')
+            current_coil%d_type = 'magnetic_probe'
+
+         CASE ('magnetic_probe_tokamak')
+            ALLOCATE(current_coil)
+            current_coil =>                                                    &
+     &         diagnostic_dot_parse_probe(iou, line, line_number,              &
+     &                                    .true., 'T')
+            current_coil%d_type = 'magnetic_probe_tokamak'
+
+         CASE ('rogowski', 'b_rogowski')
+            ALLOCATE(current_coil)
+            current_coil =>                                                    &
+     &         diagnostic_dot_parse_filaments(iou, line, line_number,          &
+     &                                        .true., 'T')
+            current_coil%d_type = 'b_rogowski'
+
+         CASE ('i_rogowski')
+            ALLOCATE(current_coil)
+            current_coil =>                                                    &
+     &         diagnostic_dot_parse_filaments(iou, line, line_number,          &
+     &                                        .true., 'A')
+            current_coil%d_type = 'i_rogowski'
+
+         CASE ('f_rogowski')
+            ALLOCATE(current_coil)
+            current_coil =>                                                    &
+     &         diagnostic_dot_parse_filaments(iou, line, line_number,          &
+     &                                        .true., 'Wb')
+            current_coil%d_type = 'f_rogowski'
+
+         CASE ('s_rogowski')
+            ALLOCATE(current_coil)
+            current_coil =>                                                    &
+     &         diagnostic_dot_parse_s_rogowski(iou, line, line_number)
+            current_coil%d_type = 's_rogowski'
+
+         CASE ('b_point_probe')
+            ALLOCATE(current_coil)
+            current_coil =>                                                    &
+     &         diagnostic_dot_parse_point(iou, line, line_number,              &
+     &                                    'T', .true.)
+            current_coil%d_type = 'b_point_probe'
+
+         CASE ('b_point_probe_cyl')
+            ALLOCATE(current_coil)
+            current_coil =>                                                    &
+     &         diagnostic_dot_parse_point(iou, line, line_number,              &
+     &                                    'T', .false.)
+            current_coil%d_type = 'b_point_probe'
+
+      END SELECT
+
+      current_coil%next => diagnostic_dot_init_coil(iou, line_number)
+
+      CALL profiler_set_stop_time('diagnostic_dot_init_coil',                  &
      &                            start_time)
 
       END FUNCTION
@@ -333,39 +364,22 @@
 !>
 !>  @param[inout] this A @ref diagnostic_dot_coil list.
 !-------------------------------------------------------------------------------
-      SUBROUTINE diagnostic_dot_destruct(list)
+      SUBROUTINE diagnostic_dot_destruct(this)
 
       IMPLICIT NONE
 
 !  Declare Arguments
-      TYPE (diagnostic_dot_coil), POINTER :: list
-
-!  local variables
-      TYPE (diagnostic_dot_coil), POINTER :: current_coil
+      TYPE (diagnostic_dot_coil), INTENT(INOUT) :: this
 
 !  Start of executable code
-      DO WHILE(ASSOCIATED(list))
+      IF (ASSOCIATED(this%coil)) THEN
+         DEALLOCATE(this%coil)
+         this%coil => null()
+      END IF
 
-!  Check if the end of the list has been reached yet. If this is not the last
-!  node, point current_coil to the start of the linked list. Move the start of
-!  the list to next node. current_coil still points to the last node. With the
-!  list pointing to the next node, erase the current node. Otherwise erase the
-!  list.
-         IF (ASSOCIATED(list%next)) THEN
-            current_coil => list
-            list => list%next
-
-            IF (ASSOCIATED(current_coil%coil)) THEN
-               DEALLOCATE(current_coil%coil)
-               current_coil%coil => null()
-            END IF
-
-            DEALLOCATE(current_coil)
-         ELSE
-            DEALLOCATE(list)
-         END IF
-
-      END DO
+      IF (ASSOCIATED(this%next)) THEN
+         DEALLOCATE(this%next)
+      END IF
 
       END SUBROUTINE
 

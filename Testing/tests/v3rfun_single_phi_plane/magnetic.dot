@@ -1,0 +1,17 @@
+magnetic_probe_tokamak
+probe_0
+0.001 0.6 0.0 0.0 90.0
+
+magnetic_probe_tokamak
+probe_90
+0.001 0.6 90.0 0.0 90.0
+
+magnetic_probe_tokamak
+probe_180
+0.001 0.6 180.0 0.0 90.0
+
+magnetic_probe_tokamak
+probe_270
+0.001 0.6 270.0 0.0 90.0
+
+end_of_file
