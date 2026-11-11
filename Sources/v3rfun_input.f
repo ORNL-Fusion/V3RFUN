@@ -155,7 +155,7 @@
 !>  Number of shell toroidal grid points.
       INTEGER :: kp_shell = 1
 !>  Number of field periods.
-      INTEGER :: n_field_periods_nli = 0
+      INTEGER :: n_field_periods_nli = 1
 
 !>  Minimum R for plasma grid.
       REAL (rprec) :: rmin = 0.0
