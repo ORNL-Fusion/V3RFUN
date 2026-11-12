@@ -45,7 +45,7 @@
          INTEGER                               :: mi_iou
 
 !>  Linked list containing all the diagnostic coils.
-         TYPE (diagnostic_dot_coil), POINTER   :: coils => null()
+         CLASS (diagnostic_dot_coil), POINTER  :: coils => null()
 
 !>  Array of external field coil currents
          REAL (rprec), DIMENSION(:), POINTER   :: extcur => null()
@@ -77,6 +77,14 @@
 !>  Array of stellarator symmetric conducting shell response functions.
          REAL(rprec), DIMENSION(:,:,:), POINTER    ::                          &
      &      s_response_ss => null()
+      CONTAINS
+         FINAL     :: v3rfun_context_destruct
+         PROCEDURE :: write_mrf => v3rfun_context_write_mrf
+         PROCEDURE :: write_point => v3rfun_context_write_point
+         PROCEDURE :: init_field_coils =>                                      &
+     &                   v3rfun_context_init_field_coils
+         PROCEDURE :: init_responce_grids =>                                   &
+     &                   v3rfun_context_init_responce_grids
       END TYPE
 
 !*******************************************************************************
@@ -193,8 +201,7 @@
      &                            start_time)
 
       IF (l_read_coils_dot) THEN
-         CALL v3rfun_context_construct_field_coils(                            &
-     &           v3rfun_context_construct)
+         CALL v3rfun_context_construct%init_field_coils
 
          ALLOCATE(v3rfun_context_construct%rdiag(SIZE(coil_group)))
          ALLOCATE(v3rfun_context_construct%extcur(SIZE(coil_group)))
@@ -216,8 +223,7 @@
 
       END IF
 
-      CALL v3rfun_context_construct_responce_grids(                            &
-     &        v3rfun_context_construct)
+      CALL v3rfun_context_construct%init_responce_grids
 
       CALL profiler_set_stop_time('v3rfun_context_construct',                  &
      &                            start_time)
@@ -240,20 +246,21 @@
 !>
 !>  @params[in] this An instance of a @ref v3rfun_context_class.
 !-------------------------------------------------------------------------------
-      SUBROUTINE v3rfun_context_construct_field_coils(this)
+      SUBROUTINE v3rfun_context_init_field_coils(this)
 
       IMPLICIT NONE
 
 !  Declare Arguments
-      TYPE (v3rfun_context_class), POINTER :: this
+      CLASS (v3rfun_context_class), INTENT(inout) :: this
 
 !  local variables
-      INTEGER                              :: i, j
-      REAL (rprec)                         :: current
-      REAL (rprec), DIMENSION(3)           :: center
-      REAL (rprec), DIMENSION(3)           :: mean_r
-      TYPE (bsc_rs)                        :: rotation_shift
-      REAL (rprec)                         :: start_time
+      INTEGER                                     :: i
+      INTEGER                                     :: j
+      REAL (rprec)                                :: current
+      REAL (rprec), DIMENSION(3)                  :: center
+      REAL (rprec), DIMENSION(3)                  :: mean_r
+      TYPE (bsc_rs)                               :: rotation_shift
+      REAL (rprec)                                :: start_time
 
 !  Start of executable code
       start_time = profiler_get_start_time()
@@ -316,7 +323,7 @@
       END DO
 
       CALL profiler_set_stop_time(                                             &
-     &        'v3rfun_context_construct_field_coils', start_time)
+     &        'v3rfun_context_init_field_coils', start_time)
 
 1000  FORMAT('Expected field coil when l_read_coils_dot = ',l)
 1100  FORMAT('Coils file ',a,' read, number of coil groups is ',i4)
@@ -340,23 +347,26 @@
 !>
 !>  @params[in] this An instance of a @ref v3rfun_context_class.
 !-------------------------------------------------------------------------------
-      SUBROUTINE v3rfun_context_construct_responce_grids(this)
+      SUBROUTINE v3rfun_context_init_responce_grids(this)
       USE coordinate_utilities
 
       IMPLICIT NONE
 
 !  Declare Arguments
-      TYPE (v3rfun_context_class), POINTER :: this
+      CLASS (v3rfun_context_class), INTENT(inout) :: this
 
 !  local variables
-      REAL (rprec)                          :: fperiod
-      REAL (rprec)                          :: delr
-      REAL (rprec)                          :: delz
-      REAL (rprec)                          :: delp
-      REAL(rprec), DIMENSION(3)             :: xcyl
-      REAL(rprec)                           :: phi0
-      INTEGER                               :: k, l, i, j
-      REAL (rprec)                          :: start_time
+      REAL (rprec)                                :: fperiod
+      REAL (rprec)                                :: delr
+      REAL (rprec)                                :: delz
+      REAL (rprec)                                :: delp
+      REAL (rprec), DIMENSION(3)                  :: xcyl
+      REAL(rprec)                                 :: phi0
+      INTEGER                                     :: k
+      INTEGER                                     :: l
+      INTEGER                                     :: i
+      INTEGER                                     :: j
+      REAL (rprec)                                :: start_time
 
 !  Start of executable code
       start_time = profiler_get_start_time()
@@ -381,20 +391,20 @@
 !$OMP& PRIVATE(i,j,k,l,xcyl,phi0)
 !$OMP DO
 !$OMP& SCHEDULE(STATIC)
-      DO k = 1, kp
-         phi0 = (k - 1)*delp
-         DO l = 1, nfp_bs
-            xcyl(2) = phi0 + (l - 1)*fperiod
+      DO l = 1, nfp_bs
+         phi0 = (l - 1)*fperiod
+         DO k = 1, kp
+            xcyl(2) = phi0 + (k - 1)*delp
             this%phi_grid_e(k,l) = xcyl(2)
-            DO i = 1, ir
-               xcyl(1) = rmin + (i - 1)*delr
-               DO j = 1, jz
-                  xcyl(3) = zmin + (j - 1)*delz
+            DO j = 1, jz
+               xcyl(3) = zmin + (j - 1)*delz
+               DO i = 1, ir
+                  xcyl(1) = rmin + (i - 1)*delr
                   this%xcart_grid_e(i,j,k,l,1:3) = cyl_to_cart(xcyl)
-               END DO ! over j
-            END DO ! over i
-         END DO ! over l
-      END DO ! over k
+               END DO ! over i
+            END DO ! over j
+         END DO ! over k
+      END DO ! over l
 !$OMP END DO
 !$OMP END PARALLEL
 
@@ -418,10 +428,10 @@
 !$OMP& PRIVATE(j,k,l,xcyl,delr,phi0)
 !$OMP DO
 !$OMP& SCHEDULE(STATIC)
-         DO k = 1, kp_shell
-            phi0 = (k - 1)*delp
-            DO l = 1, nfp_bs
-               xcyl(2) = phi0 + (l - 1)*fperiod
+         DO l = 1, nfp_bs
+            phi0 = (l - 1)*fperiod
+            DO k = 1, kp_shell
+               xcyl(2) = phi0 + (k - 1)*delp
                this%phi_grid_shell(k,l) = xcyl(2)
                DO j = 1, i
                   delr = (j - 1)*delz
@@ -429,14 +439,14 @@
                   xcyl(3) = minor_radius*sin(delr)
                   this%xcart_s_grid_e(j,k,l,1:3) = cyl_to_cart(xcyl)
                END DO ! over j
-            END DO ! over l
-         END DO ! over k
+            END DO ! over k
+         END DO ! over l
 !$OMP END DO
 !$OMP END PARALLEL
       END IF
 
       CALL profiler_set_stop_time(                                             &
-     &        'v3rfun_context_construct_responce_grids', start_time)
+     &        'v3rfun_context_init_responce_grids', start_time)
 
       END SUBROUTINE
 
@@ -456,7 +466,7 @@
       IMPLICIT NONE
 
 !  Declare Arguments
-      TYPE (v3rfun_context_class), POINTER :: this
+      TYPE (v3rfun_context_class), INTENT(inout) :: this
 
 !  Start of executable code
       CLOSE(this%mdsig_list_iou)
@@ -468,7 +478,7 @@
       CALL cleanup_biotsavart
 
       IF (ASSOCIATED(this%coils)) THEN
-         CALL diagnostic_dot_destruct(this%coils)
+         DEALLOCATE (this%coils)
          this%coils => null()
       END IF
 
@@ -512,8 +522,6 @@
          this%s_response_ss => null()
       END IF
 
-      DEALLOCATE(this)
-
       END SUBROUTINE
 
 !*******************************************************************************
@@ -537,23 +545,27 @@
       IMPLICIT NONE
 
 !  Declare Arguments
-      TYPE (v3rfun_context_class), INTENT(inout) :: this
-      TYPE (diagnostic_dot_coil), INTENT(in)     :: d_coil
-      INTEGER, INTENT(in)                        :: id_num
+      CLASS (v3rfun_context_class), INTENT(inout) :: this
+      CLASS (diagnostic_dot_coil), INTENT(in)     :: d_coil
+      INTEGER, INTENT(in)                         :: id_num
 
 !  local variables
-      INTEGER                                    :: i, j, k, l
-      INTEGER                                    :: iss, jss, kss
-      REAL(rprec), DIMENSION(3)                  :: acart
-      TYPE (magnetic_response_class), POINTER    :: response
-      CHARACTER (len=v3rfun_file_length)         :: temp_filename
-      REAL(rprec), DIMENSION(:,:,:), POINTER     :: a_r
-      REAL(rprec), DIMENSION(:,:,:), POINTER     :: a_f
-      REAL(rprec), DIMENSION(:,:,:), POINTER     :: a_z
-      REAL(rprec), DIMENSION(:,:), POINTER       :: a_s_r
-      REAL(rprec), DIMENSION(:,:), POINTER       :: a_s_f
-      REAL(rprec), DIMENSION(:,:), POINTER       :: a_s_z
-      REAL (rprec)                               :: start_time
+      INTEGER                                     :: i
+      INTEGER                                     :: j
+      INTEGER                                     :: k
+      INTEGER                                     :: l
+      INTEGER                                     :: jss
+      INTEGER                                     :: kss
+      REAL(rprec), DIMENSION(3)                   :: acart
+      TYPE (magnetic_response_class), POINTER     :: response
+      CHARACTER (len=v3rfun_file_length)          :: temp_filename
+      REAL(rprec), DIMENSION(:,:,:), POINTER      :: a_r
+      REAL(rprec), DIMENSION(:,:,:), POINTER      :: a_f
+      REAL(rprec), DIMENSION(:,:,:), POINTER      :: a_z
+      REAL(rprec), DIMENSION(:,:), POINTER        :: a_s_r
+      REAL(rprec), DIMENSION(:,:), POINTER        :: a_s_f
+      REAL(rprec), DIMENSION(:,:), POINTER        :: a_s_z
+      REAL (rprec)                                :: start_time
 
 !  Start of executable code
       start_time = profiler_get_start_time()
@@ -582,69 +594,84 @@
 !  be private.
 !$OMP PARALLEL
 !$OMP& DEFAULT(SHARED)
-!$OMP& PRIVATE(i,j,k,l,acart)
+!$OMP& PRIVATE(i,j,k,l,acart,jss,kss)
+!$OMP WORKSHARE
+      this%pl_response = 0.0
+!$OMP END WORKSHARE
 !$OMP DO
 !$OMP& SCHEDULE(STATIC)
-      DO i = 1, ir
-         DO j = 1, jz
-            DO k = 1, kp
-               this%pl_response(i,j,k,1:3) = 0.0
-               DO l = 1, nfp_bs
+      DO l = 1, nfp_bs
+         DO k = 1, kp
+            DO j = 1, jz
+               DO i = 1, ir
                   CALL bsc_a(d_coil%coil,                                      &
      &                       this%xcart_grid_e(i,j,k,l,1:3), acart)
                   this%pl_response(i,j,k,1:3) =                                &
      &               this%pl_response(i,j,k,1:3) +                             &
      &               cart2cyl_v(acart, this%phi_grid_e(k,l))
-               END DO ! l, field periods
-            END DO ! k
-         END DO ! j
-      END DO ! i
+               END DO ! i
+            END DO ! j
+         END DO ! k
+      END DO ! l, field periods
 !$OMP END DO
-!$OMP END PARALLEL
+!$OMP WORKSHARE
       this%pl_response = this%pl_response*d_coil%factor
+!$OMP END WORKSHARE
 
 !  When using stellator symmetry, only half of the field period needs to be
 !  stored due to the symmetry. A vertical point will have the same current as a
 !  the symmetric point below the midplane. The counter point to point j is found
 !  from by counting the grid in reverse.
       IF (lstell_sym) THEN
-         DO i = 1, ir
-            iss = i
+!$OMP DO
+!$OMP& SCHEDULE(STATIC)
+         DO j = 1, jz
+            jss = jz + 1 - j
+            DO i = 1, ir
+               this%pl_response_ss(i,j,1,1) =                                  &
+     &            this%pl_response(i,j,1,1) -                                  &
+     &            this%pl_response(i,jss,1,1)
+               this%pl_response_ss(i,j,1,2) =                                  &
+     &            this%pl_response(i,j,1,2) +                                  &
+     &            this%pl_response(i,jss,1,2)
+               this%pl_response_ss(i,j,1,3) =                                  &
+     &            this%pl_response(i,j,1,3) +                                  &
+     &            this%pl_response(i,jss,1,3)
+            END DO ! i
+         END DO ! j
+!$OMP END DO
+!$OMP DO
+!$OMP& SCHEDULE(STATIC)
+         DO k = 2, SIZE(this%pl_response_ss, 3)
+            kss = kp + 2 - k
             DO j = 1, jz
                jss = jz + 1 - j
-               DO k = 1, SIZE(this%pl_response_ss, 3)
-                  IF (k .eq. 1) THEN
-                     kss = 1
-                  ELSE
-                     kss = kp + 2 - k
-                  END IF
+               DO i = 1, ir
                   this%pl_response_ss(i,j,k,1) =                               &
      &               this%pl_response(i,j,k,1) -                               &
-     &               this%pl_response(iss,jss,kss,1)
+     &               this%pl_response(i,jss,kss,1)
                   this%pl_response_ss(i,j,k,2) =                               &
      &               this%pl_response(i,j,k,2) +                               &
-     &               this%pl_response(iss,jss,kss,2)
+     &               this%pl_response(i,jss,kss,2)
                   this%pl_response_ss(i,j,k,3) =                               &
      &               this%pl_response(i,j,k,3) +                               &
-     &               this%pl_response(iss,jss,kss,3)
-               END DO ! k
+     &               this%pl_response(i,jss,kss,3)
+               END DO ! i
             END DO ! j
-         END DO ! i
+         END DO ! k
+!$OMP END DO
       END IF ! lstell_sym
 
 !  Conducting Shell Response ---------------------------------------------------
       IF (use_con_shell) THEN
-!  Parallelize the outer most loops. Any local variables inside the loop must
-!  be private.
-!$OMP PARALLEL
-!$OMP& DEFAULT(SHARED)
-!$OMP& PRIVATE(j,k,l,acart)
+!$OMP WORKSHARE
+         this%s_response = 0.0
+!$OMP END WORKSHARE
 !$OMP DO
 !$OMP& SCHEDULE(STATIC)
-         DO j = 1, SIZE(this%s_response, 1)
+         DO l = 1, nfp_bs
             DO k = 1, kp_shell
-               this%s_response(j,k,1:3) = 0.0
-               DO l = 1, nfp_bs
+               DO j = 1, SIZE(this%s_response, 1)
                   CALL bsc_a(d_coil%coil,                                      &
      &                       this%xcart_s_grid_e(j,k,l,1:3), acart)
                   this%s_response(j,k,1:3) = this%s_response(j,k,1:3) +        &
@@ -653,38 +680,64 @@
             END DO
          END DO
 !$OMP END DO
-!$OMP END PARALLEL
+!$OMP WORKSHARE
          this%s_response = this%s_response*d_coil%factor
+!$OMP END WORKSHARE
 
 !  When using stellator symmetry, only half of the field period needs to be
 !  stored due to the symmetry. A poloidal point will have the same current as a
 !  the symmetric point below the midplane. The j=1 point corresponds to the
-!  same u position on the opposite side of the field perior. For j!=0, the
+!  same u position on the opposite side of the field period. For j!=0, the
 !  symmetry point is found by counting indices backwards.
          IF (lstell_sym) THEN
+!$OMP SINGLE
+            this%s_response_ss(1,1,1) = this%s_response(1,1,1)                 &
+     &                                - this%s_response(1,1,1)
+            this%s_response_ss(1,1,2) = this%s_response(1,1,2)                 &
+     &                                + this%s_response(1,1,2)
+            this%s_response_ss(1,1,3) = this%s_response(1,1,3)                 &
+     &                                + this%s_response(1,1,3)
+!$OMP END SINGLE
+!$OMP DO
+!$OMP& SCHEDULE(STATIC)
             DO j = 1, SIZE(this%s_response, 1)
-               IF (j .eq. 1) THEN
-                  jss = 1
-               ELSE
-                  jss = SIZE(this%s_response, 1) + 2 - j
-               END IF
-               DO k = 1, SIZE(this%s_response_ss, 2)
-               IF (k .eq. 1) THEN
-                  kss = 1
-               ELSE
-                  kss = kp_shell + 2 - k
-               END IF
+               jss = SIZE(this%s_response, 1) + 2 - j
 
-               this%s_response_ss(j,k,1) = this%s_response(j,k,1)              &
-     &                                   - this%s_response(jss,kss,1)
-               this%s_response_ss(j,k,2) = this%s_response(j,k,2)              &
-     &                                   + this%s_response(jss,kss,2)
-               this%s_response_ss(j,k,3) = this%s_response(j,k,3)              &
-     &                                   + this%s_response(jss,kss,3)
+               this%s_response_ss(j,1,1) = this%s_response(j,1,1)              &
+     &                                   - this%s_response(jss,1,1)
+               this%s_response_ss(j,1,2) = this%s_response(j,1,2)              &
+     &                                   + this%s_response(jss,1,2)
+               this%s_response_ss(j,1,3) = this%s_response(j,1,3)              &
+     &                                   + this%s_response(jss,1,3)
+            END DO
+!$OMP END DO
+!$OMP DO
+!$OMP& SCHEDULE(STATIC)
+            DO k = 2, SIZE(this%s_response_ss, 2)
+               kss = kp_shell + 2 - k
+
+               this%s_response_ss(1,k,1) = this%s_response(1,k,1)              &
+     &                                   - this%s_response(1,kss,1)
+               this%s_response_ss(1,k,2) = this%s_response(1,k,2)              &
+     &                                   + this%s_response(1,kss,2)
+               this%s_response_ss(1,k,3) = this%s_response(1,k,3)              &
+     &                                   + this%s_response(1,kss,3)
+
+               DO j = 2, SIZE(this%s_response, 1)
+                  jss = SIZE(this%s_response, 1) + 2 - j
+
+                  this%s_response_ss(j,k,1) = this%s_response(j,k,1)           &
+     &                                      - this%s_response(jss,kss,1)
+                  this%s_response_ss(j,k,2) = this%s_response(j,k,2)           &
+     &                                      + this%s_response(jss,kss,2)
+                  this%s_response_ss(j,k,3) = this%s_response(j,k,3)           &
+     &                                      + this%s_response(jss,kss,3)
                END DO
             END DO
+!$OMP END DO
          END IF
       END IF
+!$OMP END PARALLEL
 
 !  Assign the response function grids to pointers.
       a_r => null()
@@ -807,17 +860,17 @@
       IMPLICIT NONE
 
 !  Declare Arguments
-      TYPE (v3rfun_context_class), INTENT(inout) :: this
-      TYPE (diagnostic_dot_coil), INTENT(in)     :: d_coil
-      INTEGER, INTENT(in)                        :: id_num
+      CLASS (v3rfun_context_class), INTENT(inout) :: this
+      CLASS (diagnostic_dot_coil), INTENT(in)     :: d_coil
+      INTEGER, INTENT(in)                         :: id_num
 
 !  local variables
-      INTEGER                                    :: i
-      INTEGER                                    :: mdsig_iou
-      REAL (rprec), DIMENSION(3)                 :: b_vec
-      TYPE (magnetic_response_class), POINTER    :: response
-      CHARACTER (len=v3rfun_file_length)         :: temp_filename
-      REAL (rprec)                               :: start_time
+      INTEGER                                     :: i
+      INTEGER                                     :: mdsig_iou
+      REAL (rprec), DIMENSION(3)                  :: b_vec
+      TYPE (magnetic_response_class), POINTER     :: response
+      CHARACTER (len=v3rfun_file_length)          :: temp_filename
+      REAL (rprec)                                :: start_time
 
 !  Start of executable code
       start_time = profiler_get_start_time()
@@ -898,7 +951,7 @@
 !>  @param[in] phi   The toroidal angle to perform the conversion at.
 !>  @returns The converted vector.
 !-------------------------------------------------------------------------------
-      FUNCTION cart2cyl_v(vcart, phi)
+      PURE FUNCTION cart2cyl_v(vcart, phi)
 
       IMPLICIT NONE
 

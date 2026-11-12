@@ -18,3 +18,9 @@ target_link_libraries (xv3rfun
 add_subdirectory (Sources)
 
 install (TARGETS xv3rfun)
+
+################################################################################
+#  Testing                                                                     #
+################################################################################
+
+add_subdirectory (Testing)

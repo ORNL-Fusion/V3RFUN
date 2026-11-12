@@ -120,9 +120,11 @@
 !  v3rfun input module parameters
 !*******************************************************************************
 !>  Filename length
-      INTEGER, PARAMETER :: v3rfun_file_length = 120
+      INTEGER, PARAMETER :: v3rfun_file_length   = 120
 !>  Name length
-      INTEGER, PARAMETER :: v3rfun_name_length = 25
+      INTEGER, PARAMETER :: v3rfun_name_length   = 25
+!>  Min total phi planes.
+      INTEGER, PARAMETER :: v3rfun_min_total_phi = 180
 
 !*******************************************************************************
 !  DERIVED-TYPE DECLARATIONS
@@ -153,7 +155,7 @@
 !>  Number of shell toroidal grid points.
       INTEGER :: kp_shell = 1
 !>  Number of field periods.
-      INTEGER :: n_field_periods_nli = 0
+      INTEGER :: n_field_periods_nli = 1
 
 !>  Minimum R for plasma grid.
       REAL (rprec) :: rmin = 0.0
@@ -257,6 +259,16 @@
          WRITE(*,*) 'name_coils_dot = blank. '
          WRITE(*,*) 'Setting l_read_coils_dot to FALSE'
          l_read_coils_dot = .false.
+      END IF
+
+!  kp and kp_shell could be
+!>  @todo FIXME: When kp and kp_shell = 1 it doesn't take into account the full
+!>  3D torodial angle. There should be a way to consider the 3D response on a
+!>  single phi plane but for now set a minimum responce grid.
+      status = v3rfun_min_total_phi/n_field_periods_nli
+      kp = MAX(kp, status)
+      IF (use_con_shell) THEN
+         kp_shell = MAX(kp_shell, status)
       END IF
 
       WRITE (*,*) ' *** V3RFUN namelist input read from ' //                   &
