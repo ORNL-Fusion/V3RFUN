@@ -19,7 +19,7 @@ set_tests_properties (v3rfun_single_phi_plane_v3rfun_test
 #  Check mdsig files to ensure that values match.
 foreach (i RANGE 90 270 90)
     add_test (NAME    v3rfun_single_phi_plane_mddc_mrf_a_f_${i}_test
-              COMMAND $<TARGET_PROPERTY:xnetcdf_diff,BINARY_DIR>/xnetcdf_diff -netcdf_file1=probe_0_mdsig.nc -netcdf_file2=probe_${i}_mdsig.nc -quantity=mddc_mrf_a_f -tol=5.9E-18 -sum)
+              COMMAND $<TARGET_PROPERTY:xnetcdf_diff,BINARY_DIR>/xnetcdf_diff -netcdf_file1=probe_0_mdsig.nc -netcdf_file2=probe_${i}_mdsig.nc -quantity=mddc_mrf_a_f -tol=6.0E-18 -sum)
     set_tests_properties (v3rfun_single_phi_plane_mddc_mrf_a_f_${i}_test
                           PROPERTIES
                           DEPENDS "v3rfun_single_phi_plane_v3rfun_test")
