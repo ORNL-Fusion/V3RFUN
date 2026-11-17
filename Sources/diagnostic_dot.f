@@ -195,20 +195,20 @@
 !>  @param[in] filename File name of the diagnostic dot file.
 !>  @returns A pointer to the constructed coil.
 !-------------------------------------------------------------------------------
-      FUNCTION diagnostic_dot_construct(filename)
+      FUNCTION diagnostic_dot_construct(filename) RESULT(ret)
       USE safe_open_mod
 
       IMPLICIT NONE
 
 !  Declare Arguments
-      TYPE (diagnostic_dot_coil), POINTER :: diagnostic_dot_construct
-      CHARACTER (len=*), INTENT(in)           :: filename
+      TYPE (diagnostic_dot_coil), POINTER :: ret
+      CHARACTER (len=*), INTENT(in)       :: filename
 
 !  local variables
-      INTEGER                                 :: status
-      INTEGER                                 :: iou
-      INTEGER                                 :: line_number
-      REAL (rprec)                            :: start_time
+      INTEGER                             :: status
+      INTEGER                             :: iou
+      INTEGER                             :: line_number
+      REAL (rprec)                        :: start_time
 
 !  Start of executable code
       start_time = profiler_get_start_time()
@@ -217,8 +217,7 @@
       CALL safe_open(iou, status, filename, 'old', 'formatted')
 
       line_number = 1
-      diagnostic_dot_construct => diagnostic_dot_init_coil(iou,                &
-     &                                                     line_number)
+      ret => diagnostic_dot_init_coil(iou, line_number)
 
       CLOSE(iou)
 
@@ -244,7 +243,7 @@
       IMPLICIT NONE
 
 !  Declare Arguments
-      TYPE (diagnostic_dot_coil), POINTER :: current_coil
+      TYPE (diagnostic_dot_coil), POINTER     :: current_coil
       INTEGER, INTENT(in)                     :: iou
       INTEGER, INTENT(inout)                  :: line_number
 
@@ -379,6 +378,7 @@
 
       IF (ASSOCIATED(this%next)) THEN
          DEALLOCATE(this%next)
+         this%next => null()
       END IF
 
       END SUBROUTINE
